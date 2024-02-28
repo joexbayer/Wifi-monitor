@@ -3,6 +3,11 @@
 
 #include <stdint.h>
 
+typedef char bool_t;
+#define true 1
+#define false 0
+
+
 struct wifi_ops {
     void (*set_channel)(const char *interface, int channel);
     void (*set_monitor_mode)(const char *interface);

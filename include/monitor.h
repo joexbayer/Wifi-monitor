@@ -2,13 +2,17 @@
 #define __MONITOR_H
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <wifi.h>
+#include <packets.h>
 
 #define MAX_SSID_LENGTH 32
 #define MAC_ADDRESS_LENGTH 6
 #define MAX_ACCESS_POINTS 32
 #define MAX_INTERFACE_NAME 32
 #define MAX_NETWORKS 16
+
+#define MAX_AP_PACKETS 64
 
 typedef enum {
     MONITOR_SCAN_DISCOVERY,
@@ -42,6 +46,8 @@ struct access_point {
         size_t size;
         size_t capacity;
     } assoc_list;
+
+    struct packet_queue packets;
 };
 
 struct monitor {
@@ -62,11 +68,14 @@ struct monitor {
 
     volatile monitor_mode_t mode;
 
+    int selected_network;
+    int selected_access_point;
+
     int channel_index;
     int channel;
 };
 void monitor_free(struct monitor* mon);
-void* monitor_recv_loop(void*);
+void* monitor_thread_loop(void*);
 
 /* Utility functions */
 void print_as_hex(const unsigned char* buffer, int length);

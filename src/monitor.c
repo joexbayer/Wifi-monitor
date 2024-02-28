@@ -84,7 +84,6 @@ static void add_access_point(struct access_point_list* list, const struct access
     list->aps[list->size] = *ap_info;
     list->size++;
 }
-
 /* Function to extract RSSI from Radiotap header */
 static int get_rssi(const unsigned char* radiotap_header, int header_length) {
     if (header_length < 3) {
@@ -212,6 +211,8 @@ static void monitor_parse_beacon_frame(struct monitor* monitor, struct wifi_pack
         }
     }
 
+    packet_queue_init(&ap_info.packets, MAX_AP_PACKETS);
+
     struct wifi_network* network = monitor_add_network(monitor, ap_info.ssid);
     if(network == NULL){
         logprintf(LOG_ERROR, "Failed to add network\n");
@@ -224,22 +225,13 @@ static void monitor_parse_beacon_frame(struct monitor* monitor, struct wifi_pack
     }
 }
 
-static void monitor_print_tree(struct monitor* monitor){
-    for(int i = 0; i < MAX_NETWORKS; i++){
-        if(monitor->networks[i] != NULL){
-            printf("SSID: %s (%d APs)\n", monitor->networks[i]->ssid, monitor->networks[i]->ap_list.size);
-            for(int j = 0; j < monitor->networks[i]->ap_list.size; j++){
-                /*logprintf(LOG_INFO, "  BSSID: %02X:%02X:%02X:%02X:%02X:%02X, Channel: %d, Signal Strength: %d, Beacon Interval: %d, Capability Info: %d\n",
-                    monitor->networks[i]->ap_list.aps[j].bssid[0], monitor->networks[i]->ap_list.aps[j].bssid[1], monitor->networks[i]->ap_list.aps[j].bssid[2],
-                    monitor->networks[i]->ap_list.aps[j].bssid[3], monitor->networks[i]->ap_list.aps[j].bssid[4], monitor->networks[i]->ap_list.aps[j].bssid[5],
-                    monitor->networks[i]->ap_list.aps[j].channel, monitor->networks[i]->ap_list.aps[j].signal_strength, monitor->networks[i]->ap_list.aps[j].beacon_interval,
-                    monitor->networks[i]->ap_list.aps[j].capability_info);*/
-            }
-        }
-    }
+static void monitor_parse_data_frame(struct monitor* monitor, struct wifi_packet* packet){
+  
 }
 
 static void monitor_parse_packet(struct monitor* monitor, struct wifi_packet* packet){
+    struct access_point* ap;
+
     packet->offset = 0;
 
     /* Check if the first header is a radiotap header */
@@ -257,6 +249,30 @@ static void monitor_parse_packet(struct monitor* monitor, struct wifi_packet* pa
     if(packet->wifi_header->frame_control.protocol_version != 0){
         logprintf(LOG_WARNING, "Unsupported protocol version: %u\n", packet->wifi_header->frame_control.protocol_version);
         return;
+    }
+
+    /* Check if AP already exists, addr1 is the receiver */
+    ap = monitor_find_access_point(monitor, packet->wifi_header->addr1);
+    if(ap != NULL){
+        ap->signal_strength = packet->rssi;
+        ap->stats.frames++;
+
+        /* track errors */
+        if(packet->wifi_header->frame_control.retry){
+            ap->stats.retries++;
+        }
+    }
+
+    if(
+        monitor->mode == MONITOR_SCAN_ACCESS_POINT && ap != NULL &&
+        monitor->networks[monitor->selected_network]->ap_list.aps[monitor->selected_access_point].hash == ap->hash
+    ){
+        packet_queue_push(&ap->packets, 
+           &(struct packet){
+                .header = *packet->wifi_header,
+                .length = packet->length
+           }     
+        );
     }
 
     switch (packet->wifi_header->frame_control.type){
@@ -289,14 +305,7 @@ static void monitor_parse_packet(struct monitor* monitor, struct wifi_packet* pa
     case TYPE_CONTROL:
         break;
     case TYPE_DATA:
-        switch (packet->wifi_header->frame_control.subtype){
-        case SUBTYPE_DATA:
-            logprintf(LOG_INFO, "Data frame\n");
-            break;
-        
-        default:
-            break;
-        }
+        monitor_parse_data_frame(monitor, packet);
         break;
     default:
         //logprintf(LOG_WARNING, "Unknown frame type: %u\n", type);
@@ -304,7 +313,8 @@ static void monitor_parse_packet(struct monitor* monitor, struct wifi_packet* pa
     }
 }
 
-void* monitor_recv_loop(void* ptr){
+
+void* monitor_thread_loop(void* ptr){
     int data_size;
     struct sockaddr saddr;
     struct timeval start, current;
@@ -337,9 +347,13 @@ void* monitor_recv_loop(void* ptr){
         //printf("Elapsed: %ld\n", elapsed_ms);
         if (elapsed_ms >= 100) {
 
-            monitor->channel_index = (monitor->channel_index + 1) % monitor->ops.num_channels;  /* Change channel */
-            monitor->ops.set_channel(monitor->ifn, monitor->ops.channels[monitor->channel_index]);
-            monitor->channel = monitor->ops.channels[monitor->channel_index];  /* Update current channel */
+            if(monitor->mode == MONITOR_SCAN_ACCESS_POINT){
+                monitor->ops.set_channel(monitor->ifn, monitor->networks[monitor->selected_network]->ap_list.aps[monitor->selected_access_point].channel);
+            } else {
+                monitor->channel_index = (monitor->channel_index + 1) % monitor->ops.num_channels;  /* Change channel */
+                monitor->ops.set_channel(monitor->ifn, monitor->ops.channels[monitor->channel_index]);
+                monitor->channel = monitor->ops.channels[monitor->channel_index];  /* Update current channel */
+            }
 
             /* Reset start time */
             start = current;
@@ -428,7 +442,7 @@ error_t monitor_init(struct monitor* mon, char* ifn)
 //     }
 
 
-//     monitor_recv_loop(&monitor);
+//     monitor_thread_loop(&monitor);
 //     monitor_free(&monitor);
 //     return 0;
 // }
