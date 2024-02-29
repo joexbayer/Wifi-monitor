@@ -138,7 +138,24 @@ struct tagged_parameter {
 struct ieee80211_beacon_frame {
     uint64_t timestamp;
     uint16_t beacon_interval;
-    uint16_t capability_info;
+    struct capability_info {
+        uint16_t ess : 1;           // Extended Service Set (ESS)
+        uint16_t ibss : 1;          // Independent Basic Service Set (IBSS)
+        uint16_t cfpollable : 1;    // CF-Pollable
+        uint16_t cfpreq : 1;        // CF-Poll Request
+        uint16_t privacy : 1;       // Privacy
+        uint16_t short_preamble : 1;// Short Preamble
+        uint16_t pbcc : 1;          // PBCC
+        uint16_t channel_agility : 1;// Channel Agility
+        uint16_t spectrum_mgmt : 1; // Spectrum Management
+        uint16_t qos : 1;           // QoS
+        uint16_t short_slot_time : 1;// Short Slot Time
+        uint16_t apsd : 1;          // Automatic Power Save Delivery
+        uint16_t radio_measurement : 1; // Radio Measurement
+        uint16_t dsss_ofdm : 1;     // DSSS-OFDM
+        uint16_t delayed_block_ack : 1; // Delayed Block Ack
+        uint16_t immediate_block_ack : 1; // Immediate Block Ack
+    } __attribute__((__packed__)) capability_info;
     // Tagged parameters follow
 }__attribute__((__packed__));
 

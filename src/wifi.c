@@ -23,6 +23,12 @@ static void wifi_set_monitor_mode(const char *interface) {
     system(command);
 }
 
+static void wifi_set_ap_mode(const char *interface) {
+    char command[100];
+    sprintf(command, "iw %s set type ap", interface);
+    system(command);
+}
+
 static void wifi_set_managed_mode(const char *interface) {
     char command[100];
     sprintf(command, "iw %s set type managed", interface);

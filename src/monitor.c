@@ -23,7 +23,21 @@
 /* Global monitor */
 static struct monitor monitor;
 
+
+static struct association* access_point_find_association(struct access_point* ap, uint8_t* mac_address){
+    for(int i = 0; i < ap->assoc_list.size; i++){
+        if(memcmp(ap->assoc_list.associations[i].addr, mac_address, MAC_ADDRESS_LENGTH) == 0){
+            return &ap->assoc_list.associations[i];
+        }
+    }
+    return NULL;
+}
 static int is_new_association(const struct access_point* ap, const uint8_t* mac_address) {
+
+    if(mac_address[0] == 0 && mac_address[1] == 0){
+        return 0;
+    }
+
     for (size_t i = 0; i < ap->assoc_list.size; ++i) {
         if (memcmp(ap->assoc_list.associations[i].addr, mac_address, MAC_ADDRESS_LENGTH) == 0) {
             return 0; // Found, not a new association
@@ -43,7 +57,7 @@ static void ap_add_association(struct access_point* ap, struct association* new_
         ap->assoc_list.associations = new_associations;
         ap->assoc_list.capacity = new_capacity;
     }
-
+    new_assoc->ap = ap;
     ap->assoc_list.associations[ap->assoc_list.size] = *new_assoc;
     ap->assoc_list.size++;
 }
@@ -84,13 +98,14 @@ static void add_access_point(struct access_point_list* list, const struct access
     list->aps[list->size] = *ap_info;
     list->size++;
 }
+
 /* Function to extract RSSI from Radiotap header */
 static int get_rssi(const unsigned char* radiotap_header, int header_length) {
     if (header_length < 3) {
         return -100; // return a default low RSSI
     }
 
-    int offset = 10; // Offset where RSSI is typically found
+    int offset = 14; // Offset where RSSI is typically found
     if (offset + 1 > header_length) {
         return -100; // return default RSSI
     }
@@ -164,7 +179,23 @@ static struct access_point* monitor_find_access_point(struct monitor* monitor, u
         }
     }
     return NULL;
-}   
+}
+
+struct associtation* monitor_find_client(struct monitor* monitor, uint8_t addr[6]){
+    for(int i = 0; i < MAX_NETWORKS; i++){
+        if(monitor->networks[i] != NULL){
+            for(int j = 0; j < monitor->networks[i]->ap_list.size; j++){
+                for(int k = 0; k < monitor->networks[i]->ap_list.aps[j].assoc_list.size; k++){
+                    if(memcmp(monitor->networks[i]->ap_list.aps[j].assoc_list.associations[k].addr, addr, MAC_ADDRESS_LENGTH) == 0){
+                        return &monitor->networks[i]->ap_list.aps[j].assoc_list.associations[k];
+                    }
+                }
+            }
+        }
+    }
+    return NULL;
+}
+
 
 void monitor_free(struct monitor* mon){
     monitor_free_networks(mon);
@@ -226,7 +257,6 @@ static void monitor_parse_beacon_frame(struct monitor* monitor, struct wifi_pack
 }
 
 static void monitor_parse_data_frame(struct monitor* monitor, struct wifi_packet* packet){
-  
 }
 
 static void monitor_parse_packet(struct monitor* monitor, struct wifi_packet* packet){
@@ -261,12 +291,32 @@ static void monitor_parse_packet(struct monitor* monitor, struct wifi_packet* pa
         if(packet->wifi_header->frame_control.retry){
             ap->stats.retries++;
         }
+
+        /* FIXME: For new I assume that any clients communicating with the access point is a association... */
+        if(is_new_association(ap, packet->wifi_header->addr2)){
+            struct association new_assoc = {
+                .status_code = 0,
+                .association_id = 0
+            };
+            memcpy(new_assoc.addr, packet->wifi_header->addr2, MAC_ADDRESS_LENGTH);
+            packet_queue_init(&new_assoc.packets, MAX_AP_PACKETS);
+
+            ap_add_association(ap, &new_assoc);
+        }
     }
 
     if(
         monitor->mode == MONITOR_SCAN_ACCESS_POINT && ap != NULL &&
         monitor->networks[monitor->selected_network]->ap_list.aps[monitor->selected_access_point].hash == ap->hash
     ){
+
+        struct association* association = access_point_find_association(ap, packet->wifi_header->addr2);
+        if(association != NULL){
+            association->frames++;
+            if(packet->wifi_header->frame_control.retry){
+                association->retries++;
+            }
+        }
         packet_queue_push(&ap->packets, 
            &(struct packet){
                 .header = *packet->wifi_header,
@@ -287,15 +337,22 @@ static void monitor_parse_packet(struct monitor* monitor, struct wifi_packet* pa
             break;
         /* Association and disassociation */
         case SUBTYPE_ASSOCIATION_REQUEST:
+            if(ap != NULL) ap->stats.associations++;
+            break;
         case SUBTYPE_ASSOCIATION_RESPONSE:{
                 struct ieee80211_association_response* association_response = (struct ieee80211_association_response*)(&packet->data[packet->offset]);
                 if(association_response->capability_info == ASSOCIATION_STATUS_SUCCESS){
                     logprintf(LOG_INFO, "Association successful\n");
                 } 
             }
+            break;  
         case SUBTYPE_DISASSOCIATION:
+            if(ap != NULL) ap->stats.disassociations++;
+            monitor->dissasociations++;
+            break;
         case SUBTYPE_DEAUTHENTICATION:
-            logprintf(LOG_INFO, "Association data\n");
+            if(ap != NULL) ap->stats.deauthentications++;
+            monitor->deauthentications++;
             break;
         default:
             //logprintf(LOG_WARNING, "Unsupported management frame subtype: %u\n", subtype);
@@ -305,11 +362,69 @@ static void monitor_parse_packet(struct monitor* monitor, struct wifi_packet* pa
     case TYPE_CONTROL:
         break;
     case TYPE_DATA:
+        packet->offset += 24;
         monitor_parse_data_frame(monitor, packet);
         break;
     default:
         //logprintf(LOG_WARNING, "Unknown frame type: %u\n", type);
         break;
+    }
+}
+
+static void monitor_send_beacon(struct monitor* monitor){
+
+    struct sockaddr_ll socket_address;
+    socket_address.sll_ifindex = if_nametoindex(monitor->ifn);
+    socket_address.sll_halen = ETH_ALEN;
+    memset(socket_address.sll_addr, 0xff, 6); // Set destination MAC address: broadcast
+
+    struct ieee80211_mac_header frame = {
+        .frame_control = {
+            .protocol_version = 0,
+            .type = TYPE_MANAGEMENT,
+            .subtype = SUBTYPE_BEACON,
+            .to_ds = 0,
+            .from_ds = 0,
+            .more_fragments = 0,
+            .retry = 0,
+            .power_management = 0,
+            .more_data = 0,
+            .protected_frame = 0,
+            .order = 0
+        },
+        .duration_id = 0,
+        .addr1 = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, // Broadcast
+        .addr2 = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55}, // Random MAC address
+        .addr3 = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55}, // Random MAC address
+        .sequence_control = 0,
+    };
+
+    struct ieee80211_beacon_frame beacon = {
+        .timestamp = 0,
+        .beacon_interval = 100,
+        .capability_info = (struct capability_info) {
+            .ess = 1,
+            .privacy = 0,
+        }
+    };
+
+    uint8_t beacon_frame[256];
+    int frame_len = sizeof(struct ieee80211_mac_header);
+    memcpy(beacon_frame, &frame, frame_len);
+    memcpy(beacon_frame + frame_len, &beacon, sizeof(struct ieee80211_beacon_frame));
+    frame_len += sizeof(struct ieee80211_beacon_frame);
+
+    /* add ssid */
+    char ssid[] = "Test";
+    beacon_frame[frame_len++] = 0; // SSID tag
+    beacon_frame[frame_len++] = strlen(ssid);
+    memcpy(beacon_frame + frame_len, ssid, strlen(ssid));
+    frame_len += strlen(ssid);
+
+    if (sendto(monitor->raw_socket, beacon_frame, frame_len, 0, 
+           (struct sockaddr*)&socket_address, sizeof(socket_address)) < 0) {
+        perror("sendto failed");
+        // Handle error
     }
 }
 
@@ -345,7 +460,7 @@ void* monitor_thread_loop(void* ptr){
         gettimeofday(&current, NULL);
         long elapsed_ms = (current.tv_sec - start.tv_sec) * 1000 + (current.tv_usec - start.tv_usec) / 1000;
         //printf("Elapsed: %ld\n", elapsed_ms);
-        if (elapsed_ms >= 100) {
+        if (elapsed_ms >= monitor->interval) {
 
             if(monitor->mode == MONITOR_SCAN_ACCESS_POINT){
                 monitor->ops.set_channel(monitor->ifn, monitor->networks[monitor->selected_network]->ap_list.aps[monitor->selected_access_point].channel);
@@ -423,6 +538,11 @@ error_t monitor_init(struct monitor* mon, char* ifn)
     mon->channel_index = 0;
     mon->channel = mon->ops.channels[mon->channel_index];
     mon->ops.set_channel(ifn, mon->channel);
+
+    mon->dissasociations = 0;
+    mon->deauthentications = 0;
+
+    mon->interval = 100;
  
     return MON_ERR_OK;
 }
