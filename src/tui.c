@@ -7,11 +7,14 @@
 #include <log.h>
 #include <wifi.h>
 #include <error.h>
+#include <db.h>
 
 #include <pthread.h>
 
 
 #define MAX_ROWS 5
+
+static struct db hostdb;
 
 /* Function to initialize ncurses */
 static void init_ncurses() {
@@ -25,59 +28,49 @@ static void tui_display_monitor_stats(struct monitor *monitor) {
     int max_y, max_x;
     getmaxyx(stdscr, max_y, max_x);
     move(max_y - 1, 0);
-
     clrtoeol();
     printw("Channel: %d, Interval: %d", monitor->channel, monitor->interval);
-
     refresh();
 }
 
 static void tui_monitor_access_point(struct monitor *monitor, int selected_network, int selected_ap) {
     int ret;
-    struct access_point *ap = &monitor->networks[selected_network]->ap_list.aps[selected_ap];
     int max_y, max_x;
+    struct access_point *ap = &monitor->networks[selected_network]->ap_list.aps[selected_ap];
+
     getmaxyx(stdscr, max_y, max_x); 
-
-    
     WINDOW *header_win = newwin(1, max_x, 0, 0); 
-    
     WINDOW *data_win = newwin(max_y - 1, max_x, 1, 0); 
-
     
     scrollok(data_win, TRUE);
-
     
     wprintw(header_win, "SSID: %s, BSSID: %02x:%02x:%02x:%02x:%02x:%02x, Ch: %d, Signal: %d dBm, Beacon: %d ms, Cap: %d, Associations: %ld, Retries: %ld, Failed: %ld, Frames: %ld", 
         monitor->networks[selected_network]->ssid, 
         ap->bssid[0], ap->bssid[1], ap->bssid[2], 
         ap->bssid[3], ap->bssid[4], ap->bssid[5], 
-        ap->channel, 
-        ap->signal_strength, 
-        ap->beacon_interval, 
-        ap->capability_info, 
-        ap->stats.associations, 
-        ap->stats.retries, 
-        ap->stats.failed, 
-        ap->stats.frames
+        ap->channel, ap->signal_strength, ap->beacon_interval, 
+        ap->capability_info, ap->stats.associations, ap->stats.retries, 
+        ap->stats.failed, ap->stats.frames
     );
     wrefresh(header_win);  
 
     timeout(75);
 
-    struct packet_history history;
-    init_packet_history(&history);
-
+    char name[32];
     int packet_count = 0;
     struct packet packet;
-    while(1) {
+    struct packet_history history;
+    init_packet_history(&history);
+    while (1){
         werase(data_win);
 
         int row = 0;
-        struct packet packet;
-
         for (int i = 0; i < ap->assoc_list.size; i++) {
             struct association *assoc = &ap->assoc_list.associations[i];
-            wprintw(data_win, "Client: %02x:%02x:%02x:%02x:%02x:%02x, Cap: %d, Status: %d, Assoc ID: %d, Retries: %d, Failed: %d, Frames: %d\n", 
+            memset(name, 0, 32);
+            db_find(&hostdb, hash(assoc->addr), name);
+            
+            wprintw(data_win, "Client: %02x:%02x:%02x:%02x:%02x:%02x, Cap: %d, Status: %d, Assoc ID: %d, Retries: %d, Failed: %d, Frames: %d, %s\n", 
                 assoc->addr[0], assoc->addr[1], assoc->addr[2], 
                 assoc->addr[3], assoc->addr[4], assoc->addr[5], 
                 assoc->capability_info, 
@@ -85,35 +78,27 @@ static void tui_monitor_access_point(struct monitor *monitor, int selected_netwo
                 assoc->association_id, 
                 assoc->retries, 
                 assoc->failed, 
-                assoc->frames
+                assoc->frames,
+                name
             );
- 
-
             row += 1;
         }
-
-        int timeline_row = row + 1;
-        mvwhline(data_win, timeline_row, 0, '.', 80);
-
+        mvwhline(data_win, row + 1, 0, '.', 80);
        
         int new_packets = 0;
         while (packet_queue_pop(&ap->packets, &packet) == 0) {
             new_packets++;
         }
-
         add_packet_to_history(&history, new_packets);
 
         start_color();
         init_pair(1, COLOR_GREEN, COLOR_BLACK); 
         init_pair(2, COLOR_BLACK, COLOR_BLACK); 
 
-        int base_line = row;
-
         for (int i = 0; i < TIMELINE_LENGTH; i++) {
             int color_pair = history.data[i] == 0? 2 : 1;
-            mvwaddch(data_win, base_line, i, '*' | COLOR_PAIR(color_pair));
+            mvwaddch(data_win, row, i, '*' | COLOR_PAIR(color_pair));
         }
-
         wrefresh(data_win); 
 
         tui_display_monitor_stats(monitor);
@@ -131,7 +116,7 @@ static void tui_monitor_access_point(struct monitor *monitor, int selected_netwo
     }
 }
 
-static void display_access_points(struct monitor* monitor, int selected_network, int selected_ap) {
+static void tui_display_access_points(struct monitor* monitor, int selected_network, int selected_ap) {
     clear();  
     start_color();
     init_pair(1, COLOR_RED, COLOR_BLACK);    
@@ -139,16 +124,21 @@ static void display_access_points(struct monitor* monitor, int selected_network,
     init_pair(3, COLOR_GREEN, COLOR_BLACK);  
 
     printw("%-17s %-15s %-10s %-18s %-10s %-15s %-18s %-18s\n", 
-        "BSSID", "Signal Strength", "Channel", "Frames Received", "Retries", "Clients", "Disassociations", "Deauthentications");
+        "BSSID", "Signal Strength", "Channel", "Frames Received",
+        "Retries", "Clients", "Disassociations", "Deauthentications"
+    );
 
     for (int i = 0; i < monitor->networks[selected_network]->ap_list.size; i++) {
         if (i == selected_ap) {
             attron(A_REVERSE);  
         }
+
         struct access_point *ap = &monitor->networks[selected_network]->ap_list.aps[i];
         printw("%02x:%02x:%02x:%02x:%02x:%02x  ", 
             ap->bssid[0], ap->bssid[1], ap->bssid[2], 
-            ap->bssid[3], ap->bssid[4], ap->bssid[5]); 
+            ap->bssid[3], ap->bssid[4], ap->bssid[5]
+        );
+
         if (ap->signal_strength > -50) {
             attron(COLOR_PAIR(3)); 
         } else if (ap->signal_strength > -70) {
@@ -161,21 +151,22 @@ static void display_access_points(struct monitor* monitor, int selected_network,
 
         printw("%-10d %-18ld %-10ld %-15ld %-18ld %-18ld\n", 
             ap->channel, ap->stats.frames, ap->stats.retries, 
-            ap->assoc_list.size, ap->stats.disassociations, ap->stats.deauthentications);
+            ap->assoc_list.size, ap->stats.disassociations,
+            ap->stats.deauthentications
+        );
 
         attroff(A_REVERSE);  
     }
     tui_display_monitor_stats(monitor);
-    refresh();  
-
-
+    refresh();
 }
 
 static void tui_access_points(struct monitor *monitor, int selected_network) {
     int selected_ap = 0;
     monitor->interval = 25;
+
     while(1){
-        display_access_points(monitor, selected_network, selected_ap);
+        tui_display_access_points(monitor, selected_network, selected_ap);
         int ch = getch();
 
         /* TOOD: Convert to switch */
@@ -210,21 +201,21 @@ static void tui_find_client(struct monitor* monitor){
 
     noecho();
 
-    int parsed_items = sscanf(str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &addr[0], &addr[1], &addr[2], &addr[3], &addr[4], &addr[5]);
-
+    sscanf(str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &addr[0], &addr[1], &addr[2], &addr[3], &addr[4], &addr[5]);
     struct association* assoc = monitor_find_client(monitor, addr);
     if (assoc != NULL) {
         printw("Client found: %02x:%02x:%02x:%02x:%02x:%02x\n", 
             assoc->addr[0], assoc->addr[1], assoc->addr[2], 
-            assoc->addr[3], assoc->addr[4], assoc->addr[5]);
+            assoc->addr[3], assoc->addr[4], assoc->addr[5]
+        );
 
         if (assoc->ap != NULL) {
             printw("Connected to AP SSID: %s, BSSID: %02x:%02x:%02x:%02x:%02x:%02x\n", 
                 assoc->ap->ssid, 
                 assoc->ap->bssid[0], assoc->ap->bssid[1], assoc->ap->bssid[2], 
-                assoc->ap->bssid[3], assoc->ap->bssid[4], assoc->ap->bssid[5]);
-            printw("Signal Strength: %d dBm, Frames Sent: %ld\n", 
-                assoc->ap->signal_strength, assoc->frames);
+                assoc->ap->bssid[3], assoc->ap->bssid[4], assoc->ap->bssid[5]
+            );
+            printw("Signal Strength: %d dBm, Frames Sent: %ld\n", assoc->ap->signal_strength, assoc->frames);
         } else {
             printw("AP information not available\n");
         }
@@ -251,7 +242,35 @@ static void display_networks(struct monitor *monitor, int selected_network) {
     printw("Dissociations: %ld, Deauthentications: %ld\n", monitor->dissasociations, monitor->deauthentications);
     refresh();  
 }
+
+static int load_hostdb(struct db* hostdb, const char* filename) {
+    FILE* file = fopen(filename, "r");
+    if (file == NULL) {
+        return -1;
+    }
+
+    char line[100];
+    char name[32];
+    char mac[18];
+    while (fgets(line, sizeof(line), file)) {
+        memset(name, 0, sizeof(name));
+        memset(mac, 0, sizeof(mac));
+        line[strcspn(line, "\n")] = 0; // Remove newline character
+
+        if (sscanf(line, "%[^,],%s", name, mac) == 2) {
+            printf("Name: %s, MAC Address: %s\n", name, mac);
+            db_insert(hostdb, hash(mac), name); // Ensure this function works correctly
+        } else {
+            fprintf(stderr, "Invalid line format: %s\n", line);
+        }
+    }
+
+    fclose(file);
+    return 0;
+}
+
 static struct monitor monitor;
+
 
 int main(int argc, char** argv) {
     if(argc < 2){
@@ -264,6 +283,9 @@ int main(int argc, char** argv) {
         logprintf(LOG_ERROR, "Failed to initialize monitor\n");
         return 1;
     }
+    db_init(&hostdb);
+
+    load_hostdb(&hostdb, "data_parsed.csv");
 
     pthread_t thread;
     int ch;

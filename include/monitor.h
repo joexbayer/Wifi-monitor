@@ -22,6 +22,7 @@ typedef enum {
 } monitor_mode_t;
 
 struct access_point {
+    uint32_t hash;                      // Hash of the BSSID
     struct wifi_network *network;       // Network to which the AP belongs
     char ssid[MAX_SSID_LENGTH + 1];     // SSID of the AP, +1 for null terminator
     uint8_t bssid[MAC_ADDRESS_LENGTH];  // BSSID (MAC Address) of the AP
@@ -29,8 +30,6 @@ struct access_point {
     int signal_strength;                // RSSI in dBm
     uint16_t beacon_interval;           // Beacon interval in milliseconds
     struct capability_info capability_info;           // Capability information
-    uint32_t hash;                      // Hash of the BSSID
-    
     struct statistics {
         long retries;                   // Number of retries
         long failed;                    // Number of failed frames
@@ -39,18 +38,14 @@ struct access_point {
         long disassociations;           // Number of disassociations
         long deauthentications;         // Number of deauthentications
     } stats;
-
     struct associations_list {
         struct association {
             uint8_t addr[MAC_ADDRESS_LENGTH];   // MAC address of the client
             uint16_t capability_info;           // Capability information
             uint16_t status_code;               // Status of the association (success, failure, etc.)
             uint16_t association_id;            // Association ID assigned by the AP
-
             struct packet_queue packets;        // Queue of packets from this client
-
             struct access_point *ap;            // Pointer to the access point
-        
             int frames;
             int retries;
             int failed;
@@ -74,10 +69,8 @@ struct monitor {
     }* networks[MAX_NETWORKS];
 
     struct wifi_ops ops;
-
     int raw_socket;
     char ifn[MAX_INTERFACE_NAME];
-
     volatile monitor_mode_t mode;
 
     int selected_network;
@@ -87,7 +80,6 @@ struct monitor {
     int channel;
 
     int interval;
-
     long dissasociations;
     long deauthentications;
 };

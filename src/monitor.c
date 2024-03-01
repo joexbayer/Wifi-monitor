@@ -32,9 +32,10 @@ static struct association* access_point_find_association(struct access_point* ap
     }
     return NULL;
 }
-static int is_new_association(const struct access_point* ap, const uint8_t* mac_address) {
 
-    if(mac_address[0] == 0 && mac_address[1] == 0){
+static int is_new_association(const struct access_point* ap, const uint8_t* mac_address) {
+    /* Ignore clients with leading 00s and clients that share first 3 numbers */
+    if((mac_address[0] == 0 && mac_address[1] == 0) || memcmp(mac_address, ap->bssid, 3) == 0){
         return 0;
     }
 
