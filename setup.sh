@@ -7,7 +7,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-sudo ifconfig $INTERFACE_NAME down
+sudo ip link set dev $INTERFACE_NAME down
 sudo iw $INTERFACE_NAME set monitor none
-sudo ifconfig $INTERFACE_NAME up
+sudo ip link set dev $INTERFACE_NAME up
 iw $INTERFACE_NAME info | grep 'type'

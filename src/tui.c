@@ -50,13 +50,11 @@ static void tui_monitor_access_point(struct monitor *monitor, int selected_netwo
     
     scrollok(data_win, TRUE);
     
-    wprintw(header_win, "SSID: %s, BSSID: %02x:%02x:%02x:%02x:%02x:%02x, Ch: %d, Signal: %d dBm, Beacon: %d ms, Cap: %d, Associations: %ld, Retries: %ld, Failed: %ld, Frames: %ld", 
+    wprintw(header_win, "SSID: %s, BSSID: %02x:%02x:%02x:%02x:%02x:%02x, Ch: %d, Signal: %d dBm, Beacon: %d ms", 
         monitor->networks[selected_network]->ssid, 
         ap->bssid[0], ap->bssid[1], ap->bssid[2], 
         ap->bssid[3], ap->bssid[4], ap->bssid[5], 
-        ap->channel, ap->signal_strength, ap->beacon_interval, 
-        ap->capability_info, ap->stats.associations, ap->stats.retries, 
-        ap->stats.failed, ap->stats.frames
+        ap->channel, ap->signal_strength, ap->beacon_interval
     );
     wrefresh(header_win);  
 
