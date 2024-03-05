@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <wifi.h>
 #include <packets.h>
+#include <pthread.h>
 
 #define MAX_SSID_LENGTH 32
 #define MAC_ADDRESS_LENGTH 6
@@ -64,6 +65,7 @@ struct monitor {
             struct access_point *aps;               // Array of access points
             size_t size;                            // Number of access points stored
             size_t capacity;                        // Capacity of the array
+            pthread_mutex_t mutex;                  // Mutex for the access point list
         } ap_list;
         /* stats */
     }* networks[MAX_NETWORKS];

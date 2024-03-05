@@ -15,6 +15,12 @@
 #define MAX_ROWS 5
 
 static struct db hostdb;
+static const char* modes [] = {
+    "MONITOR_SCAN_DISCOVERY",
+    "MONITOR_SCAN_ACCESS_POINT",
+    "MONITOR_SCAN_NETWORK",
+    "MONITOR_ACT_ACCESS_POINT"
+};
 
 /* Function to initialize ncurses */
 static void init_ncurses() {
@@ -29,7 +35,7 @@ static void tui_display_monitor_stats(struct monitor *monitor) {
     getmaxyx(stdscr, max_y, max_x);
     move(max_y - 1, 0);
     clrtoeol();
-    printw("Channel: %d, Interval: %d", monitor->channel, monitor->interval);
+    printw("Channel: %d, Interval: %d, Mode: %s", monitor->channel, monitor->interval, modes[monitor->mode]);
     refresh();
 }
 
@@ -106,7 +112,7 @@ static void tui_monitor_access_point(struct monitor *monitor, int selected_netwo
         int ch = getch();
         if (ch != ERR) { 
             if (ch == 'q') {
-                monitor->mode = MONITOR_SCAN_DISCOVERY;
+                monitor->mode = MONITOR_SCAN_NETWORK;
                 timeout(500);
                 delwin(header_win);
                 delwin(data_win);
@@ -165,6 +171,9 @@ static void tui_access_points(struct monitor *monitor, int selected_network) {
     int selected_ap = 0;
     monitor->interval = 25;
 
+    monitor->mode = MONITOR_SCAN_NETWORK;
+    monitor->selected_network = selected_network;
+
     while(1){
         tui_display_access_points(monitor, selected_network, selected_ap);
         int ch = getch();
@@ -176,12 +185,12 @@ static void tui_access_points(struct monitor *monitor, int selected_network) {
             } else if(ch == KEY_DOWN){
                 if (selected_ap < monitor->networks[selected_network]->ap_list.size - 1) selected_ap++;
             } else if(ch == '\n'){
-                monitor->selected_network = selected_network;
                 monitor->selected_access_point = selected_ap;
                 monitor->mode = MONITOR_SCAN_ACCESS_POINT;
                 tui_monitor_access_point(monitor, selected_network, selected_ap);
             } else if(ch == 'q'){
                 monitor->interval = 100;
+                monitor->mode = MONITOR_SCAN_DISCOVERY;
                 break;
             }
         }

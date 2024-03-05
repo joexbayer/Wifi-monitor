@@ -17,7 +17,7 @@ OBJS = $(patsubst src/%.c, $(OBJ_DIR)/%.o, $(SRCS))
 TARGET = $(BIN_DIR)/wifi_monitor
 
 all: $(TARGET)
-	sudo ./$(TARGET) wlx9cefd5fcd6a8
+	sudo ./$(TARGET) wlx9cefd5fcd6a8 
 
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)

@@ -23,6 +23,27 @@
 /* Global monitor */
 static struct monitor monitor;
 
+/* Function to compare two access points based on signal strength */
+static int ap_compare(const void* a, const void* b) {
+    const struct access_point* ap_a = (const struct access_point*)a;
+    const struct access_point* ap_b = (const struct access_point*)b;
+
+    /* Sorting in descending order of signal strength */
+    return ap_b->signal_strength - ap_a->signal_strength;
+}
+
+/* Function to sort the access points in the list */
+static void sort_access_points(struct access_point_list* list) {
+    if (list == NULL || list->aps == NULL || list->size <= 1) {
+        return; /* No sorting needed */
+    }
+
+    pthread_mutex_lock(&list->mutex);
+    /* Using qsort from standard library */
+    qsort(list->aps, list->size, sizeof(struct access_point), ap_compare);
+    pthread_mutex_unlock(&list->mutex);
+}
+
 
 static struct association* access_point_find_association(struct access_point* ap, uint8_t* mac_address){
     for(int i = 0; i < ap->assoc_list.size; i++){
@@ -48,6 +69,7 @@ static int is_new_association(const struct access_point* ap, const uint8_t* mac_
 }
 
 static void ap_add_association(struct access_point* ap, struct association* new_assoc) {
+
     if (ap->assoc_list.size == ap->assoc_list.capacity) {
         size_t new_capacity = ap->assoc_list.capacity == 0 ? 4 : ap->assoc_list.capacity * 2;
         struct association* new_associations = realloc(ap->assoc_list.associations, new_capacity * sizeof(struct association));
@@ -85,6 +107,7 @@ static int is_new_access_point(const struct access_point_list* list, const struc
  * @param ap_info access point to add
  */
 static void add_access_point(struct access_point_list* list, const struct access_point* ap_info) {
+    pthread_mutex_lock(&list->mutex);
     if (list->size == list->capacity) {
         size_t new_capacity = list->capacity == 0 ? 4 : list->capacity * 2;
         struct access_point* new_aps = realloc(list->aps, new_capacity * sizeof(struct access_point));
@@ -98,6 +121,7 @@ static void add_access_point(struct access_point_list* list, const struct access
 
     list->aps[list->size] = *ap_info;
     list->size++;
+    pthread_mutex_unlock(&list->mutex);
 }
 
 /* Function to extract RSSI from Radiotap header */
@@ -394,9 +418,9 @@ static void monitor_send_beacon(struct monitor* monitor){
             .order = 0
         },
         .duration_id = 0,
-        .addr1 = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, // Broadcast
-        .addr2 = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55}, // Random MAC address
-        .addr3 = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55}, // Random MAC address
+        .addr1 = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+        .addr2 = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
+        .addr3 = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
         .sequence_control = 0,
     };
 
@@ -469,6 +493,10 @@ void* monitor_thread_loop(void* ptr){
                 monitor->channel_index = (monitor->channel_index + 1) % monitor->ops.num_channels;  /* Change channel */
                 monitor->ops.set_channel(monitor->ifn, monitor->ops.channels[monitor->channel_index]);
                 monitor->channel = monitor->ops.channels[monitor->channel_index];  /* Update current channel */
+            }
+
+            if(monitor->mode == MONITOR_SCAN_NETWORK){
+                sort_access_points(&monitor->networks[monitor->selected_network]->ap_list);
             }
 
             /* Reset start time */
