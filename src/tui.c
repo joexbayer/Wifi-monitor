@@ -262,11 +262,11 @@ static int load_hostdb(struct db* hostdb, const char* filename) {
     while (fgets(line, sizeof(line), file)) {
         memset(name, 0, sizeof(name));
         memset(mac, 0, sizeof(mac));
-        line[strcspn(line, "\n")] = 0; // Remove newline character
+        line[strcspn(line, "\n")] = 0; /* Remove newline character */
 
         if (sscanf(line, "%[^,],%s", name, mac) == 2) {
             printf("Name: %s, MAC Address: %s\n", name, mac);
-            db_insert(hostdb, hash(mac), name); // Ensure this function works correctly
+            db_insert(hostdb, hash(mac), name); 
         } else {
             fprintf(stderr, "Invalid line format: %s\n", line);
         }
@@ -277,7 +277,6 @@ static int load_hostdb(struct db* hostdb, const char* filename) {
 }
 
 static struct monitor monitor;
-
 
 int main(int argc, char** argv) {
     if(argc < 2){

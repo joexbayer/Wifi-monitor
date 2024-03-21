@@ -11,7 +11,7 @@ void log_set_level(log_level_t level){
 
 void logprintf(log_level_t level, const char *format, ...){
     if (level < min_log_level) {
-        return; // Do not log if below the minimum level
+        return;
     }
     return ;
 

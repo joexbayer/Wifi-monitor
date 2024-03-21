@@ -23,7 +23,7 @@
 /* Global monitor */
 static struct monitor monitor;
 
-/* Function to compare two access points based on signal strength */
+/* Helper function to compare two access points based on signal strength */
 static int ap_compare(const void* a, const void* b) {
     const struct access_point* ap_a = (const struct access_point*)a;
     const struct access_point* ap_b = (const struct access_point*)b;
@@ -62,10 +62,10 @@ static int is_new_association(const struct access_point* ap, const uint8_t* mac_
 
     for (size_t i = 0; i < ap->assoc_list.size; ++i) {
         if (memcmp(ap->assoc_list.associations[i].addr, mac_address, MAC_ADDRESS_LENGTH) == 0) {
-            return 0; // Found, not a new association
+            return 0;
         }
     }
-    return 1; // Not found, new association
+    return 1;
 }
 
 static void ap_add_association(struct access_point* ap, struct association* new_assoc) {
@@ -95,10 +95,10 @@ static void ap_add_association(struct access_point* ap, struct association* new_
 static int is_new_access_point(const struct access_point_list* list, const struct access_point* ap_info) {
     for (size_t i = 0; i < list->size; ++i) {
         if (memcmp(list->aps[i].bssid, ap_info->bssid, MAC_ADDRESS_LENGTH) == 0) {
-            return 0; // Found, not a new AP
+            return 0;
         }
     }
-    return 1; // Not found, new AP
+    return 1;
 }
 
 /**
@@ -127,12 +127,12 @@ static void add_access_point(struct access_point_list* list, const struct access
 /* Function to extract RSSI from Radiotap header */
 static int get_rssi(const unsigned char* radiotap_header, int header_length) {
     if (header_length < 3) {
-        return -100; // return a default low RSSI
+        return -100;
     }
 
     int offset = 14; // Offset where RSSI is typically found
     if (offset + 1 > header_length) {
-        return -100; // return default RSSI
+        return -100;
     }
 
     int8_t rssi = (int8_t)radiotap_header[offset];
@@ -176,7 +176,7 @@ static struct wifi_network* monitor_add_network(struct monitor* mon, char* ssid)
             return mon->networks[i];
         }
     }
-    return NULL; // No space for new network
+    return NULL;
 }
 
 static void monitor_free_network(struct wifi_network* network){
@@ -401,7 +401,7 @@ static void monitor_send_beacon(struct monitor* monitor){
     struct sockaddr_ll socket_address;
     socket_address.sll_ifindex = if_nametoindex(monitor->ifn);
     socket_address.sll_halen = ETH_ALEN;
-    memset(socket_address.sll_addr, 0xff, 6); // Set destination MAC address: broadcast
+    memset(socket_address.sll_addr, 0xff, 6);
 
     struct ieee80211_mac_header frame = {
         .frame_control = {
@@ -446,10 +446,8 @@ static void monitor_send_beacon(struct monitor* monitor){
     memcpy(beacon_frame + frame_len, ssid, strlen(ssid));
     frame_len += strlen(ssid);
 
-    if (sendto(monitor->raw_socket, beacon_frame, frame_len, 0, 
-           (struct sockaddr*)&socket_address, sizeof(socket_address)) < 0) {
+    if (sendto(monitor->raw_socket, beacon_frame, frame_len, 0, (struct sockaddr*)&socket_address, sizeof(socket_address)) < 0) {
         perror("sendto failed");
-        // Handle error
     }
 }
 
@@ -548,14 +546,12 @@ error_t monitor_init(struct monitor* mon, char* ifn)
 
     int flags = fcntl(mon->raw_socket, F_GETFL, 0);
     if (flags == -1) {
-        // Handle error
         perror("fcntl F_GETFL");
         return -1;
     }
 
     flags |= O_NONBLOCK;
     if (fcntl(mon->raw_socket, F_SETFL, flags) == -1) {
-        // Handle error
         perror("fcntl F_SETFL O_NONBLOCK");
         return -1;
     }

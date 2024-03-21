@@ -11,7 +11,7 @@ void print_as_hex(const unsigned char* buffer, int length) {
 unsigned int hash(uint8_t *bssid) {
     unsigned int h = 0;
     for (int i = 0; i < 6; i++) {
-        h = (h << 5) ^ (h >> 27) ^ bssid[i]; // Use bit shifts and XOR for better mixing
+        h = (h << 5) ^ (h >> 27) ^ bssid[i];
     }
     return h % 1000;
 }
