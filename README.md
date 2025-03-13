@@ -1,3 +1,12 @@
-# wifi-monitor
+# Wifi-Monitor
 
-Experimental toy program to monitor wifi networks using a WiFi adapter in mointor mode.
+Experimental toy program to monitor wifi networks using a WiFi adapter in monitor mode.
+
+## Requirements
+
+
+Linux (Debian), C, Make, ncurses, iw and a wifi adapter that is able to go into monitor mode.
+
+sudo apt install build-essential
+sudo apt install libncurses-dev
+sudo apt install iw
