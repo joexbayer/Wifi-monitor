@@ -14,6 +14,7 @@ struct wifi_ops {
     void (*set_managed_mode)(const char *interface);
     void (*set_interface_down)(const char *interface);
     void (*set_interface_up)(const char *interface);
+    void (*set_ap_mode)(const char *interface);  
     int* channels;
     int num_channels;
 };

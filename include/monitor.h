@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+
+#include <error.h>
 #include <wifi.h>
 #include <packets.h>
 #include <pthread.h>
@@ -85,9 +87,11 @@ struct monitor {
     long dissasociations;
     long deauthentications;
 };
+
+error_t monitor_init(struct monitor* mon, char* ifn);
 void monitor_free(struct monitor* mon);
 void* monitor_thread_loop(void*);
-struct associtation* monitor_find_client(struct monitor* monitor, uint8_t addr[6]);
+struct association* monitor_find_client(struct monitor* monitor, uint8_t addr[6]);
 
 /* Utility functions */
 void print_as_hex(const unsigned char* buffer, int length);

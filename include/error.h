@@ -9,6 +9,6 @@ typedef enum __monitor_errors {
     MON_ERR_NULL,
     MON_ERR_SOCKET,
     MON_ERR_BIND
-};
+} monitor_errors_t;
 
 #endif // !__WIFI_ERR_H

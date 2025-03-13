@@ -21,7 +21,7 @@
 
 
 /* Global monitor */
-static struct monitor monitor;
+__attribute__((used)) static struct monitor monitor;
 
 /* Helper function to compare two access points based on signal strength */
 static int ap_compare(const void* a, const void* b) {
@@ -46,7 +46,7 @@ static void sort_access_points(struct access_point_list* list) {
 
 
 static struct association* access_point_find_association(struct access_point* ap, uint8_t* mac_address){
-    for(int i = 0; i < ap->assoc_list.size; i++){
+    for(size_t i = 0; i < ap->assoc_list.size; i++){
         if(memcmp(ap->assoc_list.associations[i].addr, mac_address, MAC_ADDRESS_LENGTH) == 0){
             return &ap->assoc_list.associations[i];
         }
@@ -156,7 +156,7 @@ static struct wifi_network* monitor_new_network(char* ssid){
 }
 
 static struct wifi_network* monitor_find_network(struct monitor* mon, char* ssid){
-    for(int i = 0; i < MAX_NETWORKS; i++){
+    for(size_t i = 0; i < MAX_NETWORKS; i++){
         if(mon->networks[i] != NULL && strcmp(mon->networks[i]->ssid, ssid) == 0){
             return mon->networks[i];
         }
@@ -170,7 +170,7 @@ static struct wifi_network* monitor_add_network(struct monitor* mon, char* ssid)
         return network;
     }
 
-    for(int i = 0; i < MAX_NETWORKS; i++){
+    for(size_t i = 0; i < MAX_NETWORKS; i++){
         if(mon->networks[i] == NULL){
             mon->networks[i] = monitor_new_network(ssid);
             return mon->networks[i];
@@ -185,7 +185,7 @@ static void monitor_free_network(struct wifi_network* network){
 }
 
 static void monitor_free_networks(struct monitor* mon){
-    for(int i = 0; i < MAX_NETWORKS; i++){
+    for(size_t i = 0; i < MAX_NETWORKS; i++){
         if(mon->networks[i] != NULL){
             monitor_free_network(mon->networks[i]);
         }
@@ -194,9 +194,9 @@ static void monitor_free_networks(struct monitor* mon){
 
 static struct access_point* monitor_find_access_point(struct monitor* monitor, uint8_t* bssid){
     uint32_t bssid_hash = hash(bssid);
-    for(int i = 0; i < MAX_NETWORKS; i++){
+    for(size_t i = 0; i < MAX_NETWORKS; i++){
         if(monitor->networks[i] != NULL){
-            for(int j = 0; j < monitor->networks[i]->ap_list.size; j++){
+            for(size_t j = 0; j < monitor->networks[i]->ap_list.size; j++){
                 if(bssid_hash == monitor->networks[i]->ap_list.aps[j].hash){
                     return &monitor->networks[i]->ap_list.aps[j];
                 }
@@ -206,11 +206,11 @@ static struct access_point* monitor_find_access_point(struct monitor* monitor, u
     return NULL;
 }
 
-struct associtation* monitor_find_client(struct monitor* monitor, uint8_t addr[6]){
-    for(int i = 0; i < MAX_NETWORKS; i++){
+struct association* monitor_find_client(struct monitor* monitor, uint8_t addr[6]){
+    for(size_t i = 0; i < MAX_NETWORKS; i++){
         if(monitor->networks[i] != NULL){
-            for(int j = 0; j < monitor->networks[i]->ap_list.size; j++){
-                for(int k = 0; k < monitor->networks[i]->ap_list.aps[j].assoc_list.size; k++){
+            for(size_t j = 0; j < monitor->networks[i]->ap_list.size; j++){
+                for(size_t k = 0; k < monitor->networks[i]->ap_list.aps[j].assoc_list.size; k++){
                     if(memcmp(monitor->networks[i]->ap_list.aps[j].assoc_list.associations[k].addr, addr, MAC_ADDRESS_LENGTH) == 0){
                         return &monitor->networks[i]->ap_list.aps[j].assoc_list.associations[k];
                     }
@@ -282,6 +282,8 @@ static void monitor_parse_beacon_frame(struct monitor* monitor, struct wifi_pack
 }
 
 static void monitor_parse_data_frame(struct monitor* monitor, struct wifi_packet* packet){
+    (void)monitor;
+    (void)packet;
 }
 
 static void monitor_parse_packet(struct monitor* monitor, struct wifi_packet* packet){
@@ -300,7 +302,7 @@ static void monitor_parse_packet(struct monitor* monitor, struct wifi_packet* pa
     }
 
     /* Extract the 802.11 header */
-    packet->wifi_header = (const struct ieee80211_header *)(&packet->data[packet->offset]);
+    packet->wifi_header = (struct ieee80211_mac_header *)(&packet->data[packet->offset]);
     if(packet->wifi_header->frame_control.protocol_version != 0){
         logprintf(LOG_WARNING, "Unsupported protocol version: %u\n", packet->wifi_header->frame_control.protocol_version);
         return;
@@ -396,7 +398,7 @@ static void monitor_parse_packet(struct monitor* monitor, struct wifi_packet* pa
     }
 }
 
-static void monitor_send_beacon(struct monitor* monitor){
+__attribute__((used)) static void monitor_send_beacon(struct monitor* monitor){
 
     struct sockaddr_ll socket_address;
     socket_address.sll_ifindex = if_nametoindex(monitor->ifn);
@@ -453,8 +455,6 @@ static void monitor_send_beacon(struct monitor* monitor){
 
 
 void* monitor_thread_loop(void* ptr){
-    int data_size;
-    struct sockaddr saddr;
     struct timeval start, current;
     struct monitor* monitor = (struct monitor*)ptr;
 
@@ -463,7 +463,7 @@ void* monitor_thread_loop(void* ptr){
 
     struct wifi_packet packet;
     while(1){
-        char* buffer = malloc(2048);
+        uint8_t* buffer = malloc(2048);
         memset(&packet, 0, sizeof(struct wifi_packet));
         packet.data = buffer;
         packet.channel = monitor->channel;

@@ -299,6 +299,9 @@ int main(int argc, char** argv) {
     int selected_network = 0;
 
     thread_create_status = pthread_create(&thread, NULL, monitor_thread_loop, (void *) &monitor);
+    if(thread_create_status < 0){
+        goto _exit_thread_error;
+    }
     
     timeout(500);
     while(1){
@@ -325,8 +328,9 @@ int main(int argc, char** argv) {
             }
         }
     }
-
+    
     pthread_join(thread, NULL);
+_exit_thread_error:
     monitor_free(&monitor);
     endwin(); 
     return 0;

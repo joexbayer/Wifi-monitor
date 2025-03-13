@@ -9,7 +9,7 @@ static const int channels[] = {
     140, 149, 153, 157, 161, 165
 };
 static const int num_channels = sizeof(channels) / sizeof(channels[0]);
-static int channel_index = 0;
+//static int channel_index = 0;
 
 static void wifi_set_channel(const char *interface, int channel) {
     char command[100];
@@ -53,6 +53,7 @@ static struct wifi_ops wifi_ops = {
     .set_managed_mode = wifi_set_managed_mode,
     .set_interface_down = wifi_set_interface_down,
     .set_interface_up = wifi_set_interface_up,
+    .set_ap_mode = wifi_set_ap_mode,
     .channels = (int*)channels,
     .num_channels = num_channels
 };
