@@ -2,3 +2,5 @@
 bin/
 *.o
 .vscode
+
+.DS_Store
