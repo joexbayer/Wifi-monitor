@@ -6,9 +6,11 @@ Experimental toy program to monitor wifi networks using a WiFi adapter in monito
 
 Linux (Debian), C, Make, ncurses, iw and a wifi adapter that is able to go into monitor mode.
 
+```bash
 sudo apt install build-essential
 sudo apt install libncurses-dev
 sudo apt install iw
+```
 
 ## Set WiFi adapter to monitor 
 
