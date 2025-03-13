@@ -19,6 +19,10 @@ Simply use the setup.sh script. It needs the adapter interface name which can be
 ip link
 ```
 
+## Legal
+
+Most countries prohibit intercepting Wi-Fi traffic without the user’s consent.
+
 <p align="center">
   <img src="https://github.com/joexbayer/Wifi-monitor/blob/main/imgs/aps.png?raw=true">
 </p>
