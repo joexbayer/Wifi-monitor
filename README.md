@@ -20,13 +20,13 @@ ip link
 ```
 
 <p align="center">
-  <img src="https://github.com/joexbayer/RetrOS-32/blob/main/imgs/aps.png?raw=true">
+  <img src="https://github.com/joexbayer/Wifi-monitor/blob/main/imgs/aps.png?raw=true">
 </p>
 
 <p align="center">
-  <img src="https://github.com/joexbayer/RetrOS-32/blob/main/imgs/clients.png?raw=true">
+  <img src="https://github.com/joexbayer/Wifi-monitor/blob/main/imgs/clients.png?raw=true">
 </p>
 
 <p align="center">
-  <img src="https://github.com/joexbayer/RetrOS-32/blob/main/imgs/networks.png?raw=true">
+  <img src="https://github.com/joexbayer/Wifi-monitor/blob/main/imgs/networks.png?raw=true">
 </p>
