@@ -1,6 +1,6 @@
 # Wifi-Monitor
 
-Experimental toy program to monitor wifi networks using a WiFi adapter in monitor mode.
+Experimental toy program to monitor wifi networks using a WiFi adapter in monitor mode. Developed to find and detect faulty access points by failed and retried frames.
 
 ## Requirements
 
